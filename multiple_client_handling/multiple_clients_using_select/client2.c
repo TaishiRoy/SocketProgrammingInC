@@ -5,7 +5,7 @@
 #include <string.h> 
 #include <sys/socket.h> 
 #include <sys/types.h> 
-#define PORT 5000 
+#define PORT 8888 
 #define MAXLINE 1024 
 int main() 
 { 
@@ -31,23 +31,28 @@ int main()
 							sizeof(servaddr)) < 0) { 
 		printf("\n Error : Connect Failed \n"); 
 	} 
+	printf("\nMessage from server: "); 
+	    read(sockfd, buffer, sizeof(buffer));
+		puts(buffer);
     while(1)
     {
         printf("\nEnter Postfix Expression :");
         int count = 0;
 	    memset(buffer, 0, sizeof(buffer)); 
         while((buffer[count++] = getchar()) != '\n'); ///to get input from terminal
-	    // strcpy(buffer, "Hello Server"); 
-	    write(sockfd, buffer, sizeof(buffer)); 
-	    printf("\tReply from server: "); 
-	    read(sockfd, buffer, sizeof(buffer)); 
-	    puts(buffer); 
-        if(strncmp(buffer,"exit",4)==0)
+		if(strncmp(buffer,"exit",4)==0)
 	    {
 	    	printf("client pressed exit\n");
             close(sockfd);
 	    	break;
 	    }
+	    // strcpy(buffer, "Hello Server"); 
+	    write(sockfd, buffer, sizeof(buffer)); 
+	    printf("\tReply from server: "); 
+	    read(sockfd, buffer, sizeof(buffer)); 
+		
+	    puts(buffer); 
+        
     }
 	close(sockfd); 
 } 
