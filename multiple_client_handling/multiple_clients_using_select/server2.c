@@ -83,12 +83,15 @@ bool isValid(char* exp)
     for (i = 0; exp[i+1]; ++i)
     {
         if(counter < 0)   return false;
-        if(exp[i]==' ')continue; 
+		if(exp[i]=='\0')	break;
+                if(exp[i]==' ')continue; 
         else if(exp[i]=='.')continue;
         else if (isdigit(exp[i]) && (exp[i+1]==' ') )
             ++counter;
-		 else if (isdigit(exp[i]) && (exp[i+1]=='\0') )
-            return false;
+		else if (isdigit(exp[i]) && (exp[i+1]=='\n') )
+            ++counter;
+        else if (isdigit(exp[i]) && (exp[i+1]!=' ') )
+            continue;
         else
         {
             --counter;
@@ -198,9 +201,9 @@ void filewritten(int sd,char *b,char *b1,struct timeval tb,struct timeval ta)
 	FILE *fptr;
 	fptr=fopen("log.txt","a+");
 	char* strip;
-	strip = strchr(b,'\n');
-	strip = '\t';
-	fprintf(fptr,"%d \t %s\b\t %s\t %0.3f \n",sd,b,b1,(float)(ta.tv_sec-tb.tv_sec));
+	strip = strtok(b,"\n");
+	strip = strtok(b,"\0");
+	fprintf(fptr,"%d -> \t %s -> \t %s -> \t %0.3f \n",sd,b,b1,(float)(ta.tv_sec-tb.tv_sec));
 	fclose(fptr);
 }
 
@@ -399,37 +402,27 @@ int main(int argc , char *argv[])
                     {
 						printf("From Client :%s",buffer);
                         double res = evaluatePostfix(buffer);
-						if(res==99999)
+						if(res==(int)res)
 						{
-							printf("\nInvalid Input\n");
-							bzero(buffer2,MAX);
-							// buffer2=buffer;								
-							bzero(buffer,MAX);
-							sprintf(buffer, "Invalid Input");                        			
-							//buffer="Not in postfix form";
-							if((valread=write(sd, buffer, 1024))<=0)	
-							{
-								printf("write error:");						
-							}
-							gettimeofday (&tvalafter, NULL);
-							filewritten(sd,buffer2,buffer,tvalbefore,tvalafter);
-						 	printf("\tTime in microseconds: %0.3f microseconds\n",(float)(tvalafter.tv_sec - tvalbefore.tv_sec));			
+							sprintf(buffer, "%d", (int)res);	
 						}
 						else
 						{
 							// bzero(buffer2,MAX);
 							// buffer2=buffer;					                        				
 							bzero(buffer,MAX);
+							// if( res == (int)res )
                         	sprintf(buffer, "%lf", res);
-							printf("\tPostfix expression evaluates to : %s\n", buffer);
-							if((valread=write(sd,buffer, 1024))<=0)	
-							{
-								printf("write error:");						
-							}
-							gettimeofday (&tvalafter, NULL);
-							filewritten(sd,buffer2,buffer,tvalbefore,tvalafter);	
-						 	printf("\tTime in microseconds: %0.3f microseconds\n\n",(float)(tvalafter.tv_sec - tvalbefore.tv_sec));			
+							
 						}
+						printf("\tPostfix expression evaluates to : %s\n", buffer);
+						if((valread=write(sd,buffer, 1024))<=0)	
+						{
+							printf("write error:");						
+						}
+						gettimeofday (&tvalafter, NULL);
+						filewritten(sd,buffer2,buffer,tvalbefore,tvalafter);	
+						printf("\tTime in microseconds: %0.3f microseconds\n\n",(float)(tvalafter.tv_sec - tvalbefore.tv_sec));			
 					
                     }
 	                		 				
