@@ -88,9 +88,7 @@ bool isValid(char* exp)
         else if (isdigit(exp[i]) && (exp[i+1]==' ') )
             ++counter;
 		 else if (isdigit(exp[i]) && (exp[i+1]=='\0') )
-            ++counter;
-        else if (isdigit(exp[i]) && (exp[i+1]!=' ') )
-            continue;
+            return false;
         else
         {
             --counter;
