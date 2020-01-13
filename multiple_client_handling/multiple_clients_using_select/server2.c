@@ -1,12 +1,13 @@
 //Example code: A simple server side code, which echos back the received message. 
-//Handle multiple socket connections with select and fd_set on Linux
+//Handle multiple socket connections with select and fd_set on Linux 
 
 // if math lib is not linked use gcc server2.c -lm -o s to compile
 
 #include <stdio.h> 
+#include<stdbool.h>
 #include<math.h>
 #include <netinet/in.h> 
-#include <stdbool.h>
+#include <sys/time.h> //FD_SET, FD_ISSET, FD_ZERO macros 
 #include <string.h> //strlen 
 #include <stdlib.h> 
 #include <errno.h> 
@@ -15,7 +16,6 @@
 #include <sys/types.h> 
 #include <sys/socket.h> 
 #include <signal.h> 
-#include <sys/time.h> //FD_SET, FD_ISSET, FD_ZERO macros 
 #include <ctype.h>
 #include <errno.h> 	
 #define FALSE 0 
@@ -194,23 +194,38 @@ int max(int x, int y)
 	else
 		return y; 
 } 	
+
+void filewritten(int sd,char *b,char *b1,struct timeval tb,struct timeval ta)
+{
+	FILE *fptr;
+	fptr=fopen("log.txt","a+");
+	char* strip;
+	strip = strchr(b,'\n');
+	strip = '\t';
+	fprintf(fptr,"%d \t %s\b\t %s\t %0.3f \n",sd,b,b1,(float)(ta.tv_sec-tb.tv_sec));
+	fclose(fptr);
+}
+
 int main(int argc , char *argv[]) 
 { 
 	int opt = 1; 
+	FILE *fp;
 	int master_socket , addrlen , new_socket , client_socket[30] , 
 		max_clients = 30 , activity, i , valread , sd; 
 	int max_sd; 
 	struct sockaddr_in address; 
-		
+	struct timeval tvalbefore,tvalafter;	
 	char *buffer; //data buffer of 1K 
+	
 		
 	//set of socket descriptors 
 	fd_set readfds,fds; 
 		
 	//a message 
-	char *message;
+	char *message,*buffer2;
 	message=(char*)malloc(1024*sizeof(char)); 
 	buffer=(char*)malloc(1024*sizeof(char));
+	buffer2=(char*)malloc(1024*sizeof(char));
 	//initialise all client_socket[] to 0 so not checked 
 	for (i = 0; i < max_clients; i++) 
 	{ 
@@ -256,7 +271,9 @@ int main(int argc , char *argv[])
 	addrlen = sizeof(address); 
 	puts("Waiting for connections ..."); 
 	FD_ZERO(&fds); 
-	
+	fp=fopen("log.txt","w");
+	fprintf(fp,"%s\t %s\t %s\t %s\t\n","client_id","query","answer","time_elapsed");
+	fclose(fp);
 		//add master socket to set 
 	FD_SET(master_socket, &fds); 
 	max_sd = master_socket;	
@@ -301,9 +318,9 @@ int main(int argc , char *argv[])
 				perror("accept"); 
 				exit(EXIT_FAILURE); 
 			} 
-			
+			 gettimeofday (&tvalbefore, NULL);
 			//inform user of socket number - used in send and receive commands 
-            printf("New connection , socket fd is %d , ip is : %s , port : %d \n" , new_socket , inet_ntoa(address.sin_addr) , ntohs(address.sin_port)); 
+			printf("New connection , socket fd is %d , ip is : %s , port : %d \n" , new_socket , inet_ntoa(address.sin_addr) , ntohs(address.sin_port)); 
 		
 			//send new connection greeting message 
 			if( send(new_socket, message, strlen(message), 0) != strlen(message) ) 
@@ -351,35 +368,70 @@ int main(int argc , char *argv[])
 				{ 
 					//set the string terminating NULL byte on the end 
 					//of the data read 
-					buffer[valread] = '\0'; 
-					//write(sd , buffer , strlen(buffer)); 
-					if(strncmp(buffer,"exit",4)==0)
+					//buffer[valread] = '\0'; 
+					//write(sd , buffer , strlen(buffer));
+					strcpy(buffer2,buffer);	 
+					
+					if(strcmp(buffer,"EXIT")==0 || buffer=="EXIT" || buffer=="exit")
 	                {
 	                	printf("client pressed exit [Press Ctrl+C to close server]");
-					    FD_CLR(sd,&readfds);
-	                	break;
+						//FD_CLR(sd,&readfds);
+						//Close the socket and mark as 0 in list for reuse 
+						close(sd); 
+						client_socket[i] = 0;	
+	                			
 	                }
-                    if(!isValid(buffer))
+                    else if(!isValid(buffer))
                     {
                     	printf("\tINVALID INPUT !!\n");
-					    bzero(buffer,MAX);
-                    	sprintf(buffer, "INVALID INPUT !!");
-					    if((valread=write(sd, (const char*)buffer, 1024))<=0)	
-					    {
-					    	printf("write error:");						
-					    }
+						// buffer2=buffer;
+
+						bzero(buffer,MAX);
+                        sprintf(buffer, "Invalid Input");
+						if((valread=write(sd, (const char*)buffer, 1024))<=0)	
+						{
+							printf("write error:");						
+							exit(0);					
+						}
+						gettimeofday (&tvalafter, NULL);
+						filewritten(sd,buffer2,buffer,tvalbefore,tvalafter);		
+						 printf("\tTime in microseconds: %0.3f microseconds\n",(float)(tvalafter.tv_sec - tvalbefore.tv_sec));			
                     }
                     else
                     {
-					    printf("Postfix Expression :%s",buffer);
-                    	double res = evaluatePostfix(buffer);
-                    	bzero(buffer,MAX);
-                    	sprintf(buffer, "%lf", res);
-					    printf("\tPostfix expression evaluates to : %s\n\n", buffer);
-					    if((valread=write(sd,buffer, 1024))<=0)	
-					    {
-					    	printf("write error:");						
-					    }
+						printf("From Client :%s",buffer);
+                        double res = evaluatePostfix(buffer);
+						if(res==99999)
+						{
+							printf("\nInvalid Input\n");
+							bzero(buffer2,MAX);
+							// buffer2=buffer;								
+							bzero(buffer,MAX);
+							sprintf(buffer, "Invalid Input");                        			
+							//buffer="Not in postfix form";
+							if((valread=write(sd, buffer, 1024))<=0)	
+							{
+								printf("write error:");						
+							}
+							gettimeofday (&tvalafter, NULL);
+							filewritten(sd,buffer2,buffer,tvalbefore,tvalafter);
+						 	printf("\tTime in microseconds: %0.3f microseconds\n",(float)(tvalafter.tv_sec - tvalbefore.tv_sec));			
+						}
+						else
+						{
+							// bzero(buffer2,MAX);
+							// buffer2=buffer;					                        				
+							bzero(buffer,MAX);
+                        	sprintf(buffer, "%lf", res);
+							printf("\tPostfix expression evaluates to : %s\n", buffer);
+							if((valread=write(sd,buffer, 1024))<=0)	
+							{
+								printf("write error:");						
+							}
+							gettimeofday (&tvalafter, NULL);
+							filewritten(sd,buffer2,buffer,tvalbefore,tvalafter);	
+						 	printf("\tTime in microseconds: %0.3f microseconds\n\n",(float)(tvalafter.tv_sec - tvalbefore.tv_sec));			
+						}
 					
                     }
 	                		 				
