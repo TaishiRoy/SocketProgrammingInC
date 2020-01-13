@@ -17,12 +17,18 @@
 #include <sys/socket.h> 
 #include <signal.h> 
 #include <ctype.h>
-#include <errno.h> 	
+#include <errno.h>
+#include<sys/sem.h>
+#include<sys/stat.h>
+#include<fcntl.h> 	
 #define FALSE 0 
 #define PORT 8888 
 #define MAX 1024
 #define MAXLINE 1024 
-
+#define P(s) semop(s, &pop, 1)  /* pop is the structure we pass for doing
+				   the P(s) operation */
+#define V(s) semop(s, &vop, 1)  /* vop is the structure we pass for doing
+				   the V(s) operation */
 char str[MAX], stack[MAX];
 int top = -1;
  
@@ -56,7 +62,6 @@ int isEmpty(struct Stack* stack)
 } /*
 int top()
 {
-
 }*/  
 double peek(struct Stack* stack) 
 { 
@@ -206,11 +211,30 @@ void filewritten(int sd,char *b,char *b1,struct timeval tb,struct timeval ta)
 	fprintf(fptr,"%d -> \t %s -> \t %s -> \t %0.3f \n",sd,b,b1,(float)(ta.tv_sec-tb.tv_sec));
 	fclose(fptr);
 }
-
+int isint(char *buffer)
+{
+	int i=0,flag=1;
+	for(i=0;i<strlen(buffer);i++)
+	{
+		if(buffer[i]=='.')
+		{
+			flag=0;
+			return flag;		
+		}	
+	}
+return flag;
+}
 int main(int argc , char *argv[]) 
 { 
 	int opt = 1; 
 	FILE *fp;
+	int semid1 ;
+	struct sembuf pop, vop;
+	semid1 = semget(IPC_PRIVATE, 1, 0777|IPC_CREAT);
+	semctl(semid1, 0, SETVAL, 1); 
+	pop.sem_num = vop.sem_num = 0;
+	pop.sem_flg = vop.sem_flg = 0;
+	pop.sem_op = -1 ; vop.sem_op = 1 ;
 	int master_socket , addrlen , new_socket , client_socket[30] , 
 		max_clients = 30 , activity, i , valread , sd; 
 	int max_sd; 
@@ -371,8 +395,13 @@ int main(int argc , char *argv[])
 					//of the data read 
 					//buffer[valread] = '\0'; 
 					//write(sd , buffer , strlen(buffer));
-					strcpy(buffer2,buffer);	 
-					
+					strcpy(buffer2,buffer);
+
+			                int l=strlen(buffer);
+					buffer2[l]='\0';
+					//int j = snprintf(buffer2, 12, "%s", buffer);
+					//bzero(buffer2,MAX); 
+					//buffer2=buffer;
 					if(strcmp(buffer,"EXIT")==0 || buffer=="EXIT" || buffer=="exit")
 	                {
 	                	printf("client pressed exit [Press Ctrl+C to close server]");
@@ -395,13 +424,16 @@ int main(int argc , char *argv[])
 							exit(0);					
 						}
 						gettimeofday (&tvalafter, NULL);
-						filewritten(sd,buffer2,buffer,tvalbefore,tvalafter);		
+						P(semid1);
+						filewritten(sd,buffer2,buffer,tvalbefore,tvalafter);
+						V(semid1);		
 						 printf("\tTime in microseconds: %0.3f microseconds\n",(float)(tvalafter.tv_sec - tvalbefore.tv_sec));			
                     }
                     else
                     {
 						printf("From Client :%s",buffer);
                         double res = evaluatePostfix(buffer);
+
 						if(res==(int)res)
 						{
 							sprintf(buffer, "%d", (int)res);	
@@ -421,7 +453,9 @@ int main(int argc , char *argv[])
 							printf("write error:");						
 						}
 						gettimeofday (&tvalafter, NULL);
+						P(semid1);
 						filewritten(sd,buffer2,buffer,tvalbefore,tvalafter);	
+						V(semid1);						 	
 						printf("\tTime in microseconds: %0.3f microseconds\n\n",(float)(tvalafter.tv_sec - tvalbefore.tv_sec));			
 					
                     }
